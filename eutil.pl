@@ -91,22 +91,31 @@ my $retstart;
 my $retmax=20;
 
 for($retstart = 0; $retstart < $Count; $retstart += $retmax) {
-  my $efetch = "$utils/efetch.fcgi?" .
-               "rettype=$report&retmode=medline&retstart=$retstart&retmax=$retmax&" .
-               "db=$db&query_key=$QueryKey&WebEnv=$WebEnv";
-	
-  print STDERR "\nEF_QUERY=$efetch\n";     
+    my $efetch = "$utils/efetch.fcgi?" .
+        "rettype=$report&retmode=medline&retstart=$retstart&retmax=$retmax&" .
+        "db=$db&query_key=$QueryKey&WebEnv=$WebEnv";
+    my %record;
 
-  my $efetch_result = get($efetch);
+    print STDERR "\nEF_QUERY=$efetch\n";     
 
-  my @t = split /\n\n/, $efetch_result;
-  print STDERR scalar @t;
-  print STDERR "\n";
-  s/\n/ /g for @t;
-  for(@t) {
-    print "\n" if /^\d+:/;
-    print;
-    print "\t";
-  }
-  print "\n";
+    my $efetch_result = get($efetch);
+    $efetch_result =~ m|<pre>(.+)</pre>|s;
+    $efetch_result = $1;
+
+    while ($efetch_result =~ m{^([A-Z]{2,4}) *- (.+)$}gm) {
+        my ($key, $value) = ($1, $2);
+
+        $record{$key} = $value if $key =~ m{^(PMID|DP|TI|AB)$};
+        push @{$record{$key}}, $value if $key =~ m{^(IS|AU)$};
+    }
+
+    my $pmid = $record{PMID};
+    my $dp   = $record{DP};
+    my $ti   = $record{TI};
+    my $ab   = $record{AB};
+    my $is   = join ";", @{$record{IS}};
+    my $au   = join ";", @{$record{AU}};
+    
+    print join "\t", $pmid, $dp, $ti, $ab, $is, $au;
+    print "\n";
 }
