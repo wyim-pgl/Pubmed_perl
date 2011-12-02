@@ -65,8 +65,12 @@ my $maxdate = ask_user("maxdate", "$year");
 
 my $esearch = "$utils/esearch.fcgi?" .
               "db=$db&retmax=1&usehistory=y&mindate=$mindate&maxdate=$maxdate&datetype=pdat&term=";
+	
+	$author .="[FAU]" if $author ne '';
+	
+	$journal .="[TA]" if $journal ne '';
 
-my $esearch_result = get($esearch . $author . '[FAU]' . $journal . '[TA]' . $query);
+my $esearch_result = get($esearch . $author . $journal . $query);
 
 print STDERR "\nESEARCH RESULT: $esearch_result\n";
 
