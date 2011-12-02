@@ -50,7 +50,7 @@ my $utils = "http://www.ncbi.nlm.nih.gov/entrez/eutils";
 
 my $db     = ask_user("Database", "Pubmed");
 my $query  = ask_user("Query",    "zanzibar");
-my $report = ask_user("Report",   "abstract");
+my $report = ask_user("Report",   "medline");
 
 # ---------------------------------------------------------------------------
 # $esearch cont햕ns the PATH & parameters for the ESearch call
