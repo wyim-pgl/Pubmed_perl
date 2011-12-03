@@ -28,12 +28,81 @@
 # File Description: eSearch/eFetch calling example
 #  
 # ---------------------------------------------------------------------------
-# Subroutine to prompt user for variables in the next section
 
 use strict;
 use warnings;
 use LWP::Simple;
 use Data::Dumper;
+use Getopt::Std;
+use File::Basename;
+
+my %defaults = ( 
+   'author|a=s'  , 'Default value of Full Author name of search for',
+   'journal|j=s' , 'Default value of Journal name of search for',
+   'min=s'       , 'Default value of Min year of search from',
+   'max=s'       , 'Default value of Max year of search from',
+   'query|q=s'   , 'Default value of keyword of search for',
+   'limit|l=i'   , 'Search limit count. Default is 500',
+   'help|h'      , 'Print help message',
+);
+
+my $opts = get_options(\%defaults);
+
+if($opts->{help}) {
+	usage();
+	exit;
+}
+
+$opts->{author}  = '' unless $opts->{author};
+$opts->{journal} = '' unless $opts->{journal};
+$opts->{query}   = '' unless $opts->{query};
+
+$opts->{limit}   = 500 unless $opts->{limit};
+
+$opts->{min}     = '1999' unless $opts->{min};
+$opts->{max}     = (localtime(time))[5] + 1900 unless $opts->{max};
+
+sub get_options {
+    my ($defaults, $opts) = (@_);
+    my %new_opts;
+
+    use Getopt::Long qw(:config no_ignore_case pass_through);
+
+    GetOptions(\%new_opts, keys %$defaults)
+    or die "Can't parse options";
+
+    if (not defined $opts) {
+        return \%new_opts;
+    }
+
+    foreach my $option (keys %new_opts) {
+        $opts->{$option} = $new_opts{$option};
+    }
+
+    return $opts;
+}
+
+sub usage {
+	my $m = basename($0);
+	print <<HELP
+Usage
+	$m [-author <full author name>] [-journal <journal name>] [-min <min year>] [-max <max year>] [-query <keyword>] [-help]
+
+Examples
+	$m -author 'Won Cheol Yim'
+	$m -q rice
+
+HELP
+#	-author
+#	-journal
+#	-min
+#	-max
+#	-query
+#	-help
+}
+
+# ---------------------------------------------------------------------------
+# Subroutine to prompt user for variables in the next section
 
 sub ask_user {
   print STDERR "$_[0] [$_[1]]: ";
@@ -44,83 +113,7 @@ sub ask_user {
 }
 
 # ---------------------------------------------------------------------------
-# Define library for the 'get' function used in the next section.
-# $utils contains route for the utilities.
-# $db, $query, and $report may be supplied by the user when prompted; 
-# if not answered, default values, will be assigned as shown below.
-
-my $utils = "http://www.ncbi.nlm.nih.gov/entrez/eutils";
-
-my $db     = "Pubmed";
-my $report = "medline";
-my $author  = ask_user("Author", "Won Cheol Yim");
-my $journal = ask_user("journal_name", "");
-my $query = ask_user("query", "");
-my $mindate = ask_user("mindate", "1999");
-my $year   = (localtime(time))[5] + 1900;
-my $maxdate = ask_user("maxdate", "$year");
-
-# ---------------------------------------------------------------------------
-# $esearch cont햕ns the PATH & parameters for the ESearch call
-# $esearch_result containts the result of the ESearch call
-# the results are displayed 햚d parsed into variables 
-# $Count, $QueryKey, and $WebEnv for later use and then displayed.
-
-my $esearch = "$utils/esearch.fcgi?" .
-              "db=$db&retmax=1&usehistory=y&mindate=$mindate&maxdate=$maxdate&datetype=pdat&term=";
-	
-	$author .="[FAU]" if $author ne '';
-	
-	$journal .="[TA]" if $journal ne '';
-
-my $esearch_result = get($esearch . $author . $journal . $query);
-
-print STDERR "\nESEARCH RESULT: $esearch_result\n";
-
-$esearch_result =~ 
-  m|<Count>(\d+)</Count>.*<QueryKey>(\d+)</QueryKey>.*<WebEnv>(\S+)</WebEnv>|s;
-
-my $Count    = $1;
-my $QueryKey = $2;
-my $WebEnv   = $3;
-
-print STDERR "Count = $Count; QueryKey = $QueryKey; WebEnv = $WebEnv\n";
-
-# ---------------------------------------------------------------------------
-# this area defines a loop which will display $retmax citation results from 
-# Efetch each time the the Enter Key is pressed, after a prompt.
-
-my $retstart;
-my $retmax=20;
-my %records;
-
-for($retstart = 0; $retstart < $Count; $retstart += $retmax) {
-    my $efetch = "$utils/efetch.fcgi?" .
-        "rettype=$report&retmode=medline&retstart=$retstart&retmax=$retmax&" .
-        "db=$db&query_key=$QueryKey&WebEnv=$WebEnv";
-    my %record;
-
-    print STDERR "\nEF_QUERY=$efetch\n";     
-
-    my $efetch_result = get($efetch);
-
-    $efetch_result =~ m|<pre>(.+)</pre>|s;
-    $efetch_result = $1;
-
-	%records = parse_medline($efetch_result);
-
-#    my $pmid = $record{PMID};
-#    my $dp   = $record{DP};
-#    my $ti   = $record{TI};
-#    my $ab   = $record{AB};
-#    my $is   = join ";", @{$record{IS}};
-#    my $au   = join ";", @{$record{AU}};
-
-	print Dumper(\%records);
-    
-    #print join "\t", $pmid, $dp, $ti, $ab, $is, $au;
-    #print "\n";
-}
+# Subroutine to parse medline format
 
 sub parse_medline {
 	my ($raw) = @_;
@@ -156,3 +149,98 @@ sub parse_medline {
 
 	return %records;
 }
+
+# ---------------------------------------------------------------------------
+# Define library for the 'get' function used in the next section.
+# $utils contains route for the utilities.
+# $db, $query, and $report may be supplied by the user when prompted; 
+# if not answered, default values, will be assigned as shown below.
+
+my $utils = "http://www.ncbi.nlm.nih.gov/entrez/eutils";
+
+my $db     = "Pubmed";
+my $report = "medline";
+my $author  = ask_user("Author",       $opts->{author});
+my $journal = ask_user("journal_name", $opts->{journal});
+my $query   = ask_user("query",        $opts->{query});
+my $mindate = ask_user("mindate",      $opts->{min});
+my $maxdate = ask_user("maxdate",      $opts->{max});
+
+# ---------------------------------------------------------------------------
+# $esearch cont햕ns the PATH & parameters for the ESearch call
+# $esearch_result containts the result of the ESearch call
+# the results are displayed 햚d parsed into variables 
+# $Count, $QueryKey, and $WebEnv for later use and then displayed.
+
+my $esearch = "$utils/esearch.fcgi?" .
+              "db=$db&retmax=1&usehistory=y&mindate=$mindate&maxdate=$maxdate&datetype=pdat&term=";
+	
+	$author .="[FAU]" if $author ne '';
+	
+	$journal .="[TA]" if $journal ne '';
+
+my $esearch_result = get($esearch . $author . $journal . $query);
+
+#print STDERR "\nESEARCH RESULT: $esearch_result\n";
+
+$esearch_result =~ 
+  m|<Count>(\d+)</Count>.*<QueryKey>(\d+)</QueryKey>.*<WebEnv>(\S+)</WebEnv>|s;
+
+my $Count    = $1;
+my $QueryKey = $2;
+my $WebEnv   = $3;
+
+print STDERR "Count = $Count; QueryKey = $QueryKey; WebEnv = $WebEnv\n";
+
+if($Count > $opts->{limit}) {
+	print STDERR "Result count is over $opts->{limit}, limitting $opts->{limit}\n";
+	$Count = $opts->{limit};
+}
+
+# ---------------------------------------------------------------------------
+# this area defines a loop which will display $retmax citation results from 
+# Efetch each time the the Enter Key is pressed, after a prompt.
+
+my $retstart;
+my $retmax=20;
+my %medlines;
+
+for($retstart = 0; $retstart < $Count; $retstart += $retmax) {
+    my $efetch = "$utils/efetch.fcgi?" .
+        "rettype=$report&retmode=medline&retstart=$retstart&retmax=$retmax&" .
+        "db=$db&query_key=$QueryKey&WebEnv=$WebEnv";
+    my %record;
+
+    print STDERR "\nEF_QUERY=$efetch\n";     
+
+    my $efetch_result = get($efetch);
+
+    $efetch_result =~ m|<pre>(.+)</pre>|s;
+    $efetch_result = $1;
+
+	my %medlines_part;
+	%medlines_part = parse_medline($efetch_result);
+
+	foreach my $key (keys %medlines_part) {
+		$medlines{ $key } = $medlines_part{$key};
+	}
+	
+#    my $pmid = $record{PMID};
+#    my $dp   = $record{DP};
+#    my $ti   = $record{TI};
+#    my $ab   = $record{AB};
+#    my $is   = join ";", @{$record{IS}};
+#    my $au   = join ";", @{$record{AU}};
+
+    
+    #print join "\t", $pmid, $dp, $ti, $ab, $is, $au;
+    #print "\n";
+}
+
+#print Dumper(\%medlines);
+
+foreach my $pmid (keys %medlines) {
+	my $medline = $medlines{$pmid};
+	printf "[%s] %s\n", $pmid, join('', @{$medline->{TI}});
+}
+
