@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/env perl
 # ===========================================================================
 #
 #                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,11 @@
 # ---------------------------------------------------------------------------
 # Subroutine to prompt user for variables in the next section
 
+use strict;
+use warnings;
+use LWP::Simple;
+use Data::Dumper;
+
 sub ask_user {
   print STDERR "$_[0] [$_[1]]: ";
   my $rc = <>;
@@ -43,8 +48,6 @@ sub ask_user {
 # $utils contains route for the utilities.
 # $db, $query, and $report may be supplied by the user when prompted; 
 # if not answered, default values, will be assigned as shown below.
-
-use LWP::Simple;
 
 my $utils = "http://www.ncbi.nlm.nih.gov/entrez/eutils";
 
@@ -89,6 +92,7 @@ print STDERR "Count = $Count; QueryKey = $QueryKey; WebEnv = $WebEnv\n";
 
 my $retstart;
 my $retmax=20;
+my %records;
 
 for($retstart = 0; $retstart < $Count; $retstart += $retmax) {
     my $efetch = "$utils/efetch.fcgi?" .
@@ -99,23 +103,56 @@ for($retstart = 0; $retstart < $Count; $retstart += $retmax) {
     print STDERR "\nEF_QUERY=$efetch\n";     
 
     my $efetch_result = get($efetch);
+
     $efetch_result =~ m|<pre>(.+)</pre>|s;
     $efetch_result = $1;
 
-    while ($efetch_result =~ m{^([A-Z]{2,4}) *- (.+)$}gm) {
-        my ($key, $value) = ($1, $2);
+	%records = parse_medline($efetch_result);
 
-        $record{$key} = $value if $key =~ m{^(PMID|DP|TI|AB)$};
-        push @{$record{$key}}, $value if $key =~ m{^(IS|AU)$};
-    }
+#    my $pmid = $record{PMID};
+#    my $dp   = $record{DP};
+#    my $ti   = $record{TI};
+#    my $ab   = $record{AB};
+#    my $is   = join ";", @{$record{IS}};
+#    my $au   = join ";", @{$record{AU}};
 
-    my $pmid = $record{PMID};
-    my $dp   = $record{DP};
-    my $ti   = $record{TI};
-    my $ab   = $record{AB};
-    my $is   = join ";", @{$record{IS}};
-    my $au   = join ";", @{$record{AU}};
+	print Dumper(\%records);
     
-    print join "\t", $pmid, $dp, $ti, $ab, $is, $au;
-    print "\n";
+    #print join "\t", $pmid, $dp, $ti, $ab, $is, $au;
+    #print "\n";
+}
+
+sub parse_medline {
+	my ($raw) = @_;
+	my %records;
+
+	my @raw = split /[\r\n]/, $raw;
+
+	my $cur_pmid;
+	my $cur_key;
+	my %medline;
+	foreach my $aLine (@raw) {
+		my $value;
+		if($aLine =~ m{^([A-Z]{2,4}) *- (.+)$}) {
+			$cur_key = $1;
+			$value = $2;
+		}
+		else {
+			$value = $aLine;
+			$value =~ s/^\s+//;
+			$value =~ s/\s+$//;
+		}
+
+		next if !defined $value or $value eq '';
+
+		if($cur_key eq 'PMID') {
+			$cur_pmid = $value;
+			$records{$cur_pmid}->{PMID} = $value;
+		}
+		else {
+			push @{ $records{$cur_pmid}->{$cur_key} }, $value;
+		}
+	}
+
+	return %records;
 }
