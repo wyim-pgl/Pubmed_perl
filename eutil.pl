@@ -43,6 +43,8 @@ my %defaults = (
    'max=s'       , 'Default value of Max year of search from',
    'query|q=s'   , 'Default value of keyword of search for',
    'limit|l=i'   , 'Search limit count. Default is 500',
+   'pdf!'        , 'Retrieve pdf info',
+   'tab!'        , 'Print tab separated values format',
    'help|h'      , 'Print help message',
 );
 
@@ -84,9 +86,9 @@ sub get_options {
 
 sub usage {
 	my $m = basename($0);
-	print <<HELP
+	print STDERR <<HELP
 Usage
-	$m [-author <full author name>] [-journal <journal name>] [-min <min year>] [-max <max year>] [-query <keyword>] [-help]
+	$m [-author <full author name>] [-journal <journal name>] [-min <min year>] [-max <max year>] [-query <keyword>] [-tab] [-help]
 
 Examples
 	$m -author 'Won Cheol Yim'
@@ -239,8 +241,33 @@ for($retstart = 0; $retstart < $Count; $retstart += $retmax) {
 
 #print Dumper(\%medlines);
 
-foreach my $pmid (keys %medlines) {
-	my $medline = $medlines{$pmid};
-	printf "[%s] %s\n", $pmid, join('', @{$medline->{TI}});
+if($opts->{pdf}) {
+	foreach my $pmid (keys %medlines) {
+		my $medline = $medlines{$pmid};
+		printf "[%s] %s\n", $pmid, join('', @{$medline->{TI}});
+		my $url_pdf_fetch = sprintf 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=pubmed&id=%s&retmode=ref&cmd=prlinks&tool=pdfetch', $pmid;
+		print $url_pdf_fetch, "\n";
+		#my $pdf = get($url_pdf_fetch);
+		#print STDERR $pdf;
+	}
 }
-
+elsif($opts->{tab}) {
+	foreach my $pmid (keys %medlines) {
+		my $medline = $medlines{$pmid};
+		#printf "[%s] %s\n", $pmid, join('', @{$medline->{TI}});
+		print join "\t",
+			$pmid,
+			join(' ', @{ $medline->{TI} }),
+			join(';', @{ $medline->{AU} }),
+			join('',  @{ $medline->{DP} }),
+			join(' ', @{ $medline->{TA} }),
+			join(' ', @{ $medline->{AB} });
+		print "\n";
+	}
+}
+else {
+	foreach my $pmid (keys %medlines) {
+		my $medline = $medlines{$pmid};
+		printf "[%s] %s\n", $pmid, join('', @{$medline->{TI}});
+	}
+}
